@@ -23,7 +23,7 @@ private:
 private:
     static constexpr auto n_cell3 = nx * ny * nt; // #unit cells in 2+1D
     static constexpr auto n_cell2 = nx * ny;// #unit cells in a 2D time-slice
-    static constexpr auto n_site3 = 2 * n_cell3; // we have 2 atoms / unit cell
+    static constexpr auto n_site3 = 2 * n_cell3;// we have 2 atoms / unit cell
     static constexpr auto n_nbrs = 5; /* we have 5 nearest neighbors, i.e.,
                                         3 (spatial) + 2 (temporal axis) */
 private:
@@ -32,7 +32,7 @@ private:
                                     calculate the indices for the neighbors 
                                     of each site once and for all */
 private:
-    // Return true with probability p
+    // return true with probability p
     bool prob_true(double p)
     {
         static const auto max = rand_gen.max();
@@ -77,38 +77,46 @@ public:
                     sublattice = 0;
                     index = coords_to_index(x, y, t, sublattice);
 
+                    // temporal neighbors
                     nbr_indices[index][0] = 
                         coords_to_index(x, y, t+1, sublattice);
                     nbr_indices[index][1] = 
                         coords_to_index(x, y, t-1, sublattice);
+
+                    // spatial always-ferromagnetic exchange
                     nbr_indices[index][2] = 
                         coords_to_index(x, y-1, t, 1-sublattice);
                     nbr_indices[index][3] = 
                         coords_to_index(x+1, y-1, t, 1-sublattice);
+
+                    // spatial sometimes-ferromagnetic exchange
                     nbr_indices[index][4] = 
                         coords_to_index(x, y, t, 1-sublattice);
+
 
 
                     sublattice = 1;
                     index = coords_to_index(x, y, t, sublattice);
 
+                    // temporal neighbors
                     nbr_indices[index][0] = 
                         coords_to_index(x, y, t+1, sublattice);
                     nbr_indices[index][1] = 
                         coords_to_index(x, y, t-1, sublattice);
+
+                    // spatial always-ferromagnetic exchange
                     nbr_indices[index][2] = 
                         coords_to_index(x, y+1, t, 1-sublattice);
                     nbr_indices[index][3] = 
                         coords_to_index(x+1, y+1, t, 1-sublattice);
+
+                    // spatial sometimes-ferromagnetic exchange
                     nbr_indices[index][4] = 
                         coords_to_index(x, y, t, 1-sublattice);
 
                 }
             }
         }
-        // for (int i = 0; i < 5; ++i) {
-            // print_coords(index_to_coords(nbr_indices[coords_to_index(0,0,0,1)][i]));
-        // }
     }
 
     void generate_random_state()
@@ -157,20 +165,20 @@ public:
 
         int nbr_spin;
 
-        // temporal axis bonds
+        // temporal axis interactions
         for (int i = 0; i < 2; ++i) {
             nbr_spin = state[nbr_indices[rand_index][i]];
             flip_cost += (+2.) * Gamma * spin * nbr_spin;
         }
 
-        // spatial (always-ferromagnetic) bonds
+        // spatial (always-ferromagnetic) interactions
         for (int i = 2; i < n_nbrs - 1; ++i) {
             nbr_spin = state[nbr_indices[rand_index][i]];
             flip_cost += (+2.) * spin * nbr_spin;
         }
 
 
-        // last bond is anti-ferromagnetic exactly for even-x sites:
+        // last bond is antiferromagnetic exactly for even-x sites:
         nbr_spin = state[nbr_indices[rand_index][n_nbrs-1]];
         flip_cost += (rand_index % 2 == 0 ? (-1) : (+1)) *
             (+2.) * spin * nbr_spin;
@@ -190,7 +198,7 @@ public:
     int cluster_update()
     {
         std::vector<int> cluster, old_set, new_set;
-        int seed_index = rand_gen() % n_site3;// index of first site on cluster
+        int seed_index = rand_gen() % n_site3;//index of first site on cluster
         cluster.push_back(seed_index);
         old_set.push_back(seed_index);
 
@@ -213,9 +221,12 @@ public:
                     ++old_it) {
                 int my_spin_state = state[*old_it];
 
-                // the upcoming for-loop will only involve ferro. bonds
+                // the upcoming for-loop will involve only ferromagnetic
+                // exchange. Here we take care of the exchange with the last
+                // neighbor, which can be either, depending on x parity.
                 int n_ferro_bonds = n_nbrs;
-                if (*old_it % 2 == 0) { // for even x, the last bond is anti-f
+                if (*old_it % 2 == 0) { /* for even x, the exchange is
+                                           antiferromagnetic */
                     n_ferro_bonds--;
                     int last_nbr_index = nbr_indices[*old_it][n_nbrs-1];
                     if (!on_cluster[last_nbr_index]) {
@@ -236,7 +247,7 @@ public:
                         int nbr_spin_state = state[nbr_index];
                         if (nbr_spin_state == my_spin_state) {
                             double p = nbr_it < 2 ? p_t : p_xy; /* is it a 
-                                        temporal or a spatial bond? */
+                                        temporal or a spatial exchange? */
                             if (prob_true(p)) {
                                 new_set.push_back(nbr_index);
                                 cluster.push_back(nbr_index);
@@ -248,6 +259,15 @@ public:
             }
             old_set = new_set;
         }
+
+        /* 
+         * is it correct to treat the cluster differently, applying 
+         * conditional acceptance of the move, if its size is 1?
+         *
+         * Currently, this implementation always accepts the cluster, and I
+         * don't understand why there should be an exception.
+         *
+         */
 
         for (auto it = cluster.begin(); it != cluster.end(); ++it) {
             state[*it] *= -1;
@@ -276,8 +296,9 @@ public:
     std::string coords_to_string (coords c)
     {
         std::ostringstream ss;
-        ss << "(" << c.x << ", " << c.y
-            << ", " << c.t << ", " << c.sublattice << ")";
+        ss << "(" << c.x << ", " << c.y << ", " << c.t << ", " 
+            << c.sublattice << ")";
+
         return ss.str();
     }
 
