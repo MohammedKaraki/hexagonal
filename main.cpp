@@ -1,3 +1,4 @@
+// #define FRUSTRATION_OFF
 #include <iostream>
 #include <random>
 #include <chrono>
@@ -5,6 +6,8 @@
 #include <array>
 #include <cmath>
 #include <sstream>
+#include <fstream>
+#include <filesystem>
 
 #include <ncurses.h>    // TUI
 #include <unistd.h>     // usleep(microseconds)
@@ -36,7 +39,61 @@ std::string pop_timer() {
 
 int main()
 {
-    constexpr int nx = 10, ny = 10, nt = 10;
+    constexpr int nx = 20, ny = 20, nt = 10;
+    double beta = 1., field = 1.;
+    hexagonal<nx, ny, nt> lattice(beta, field);
+
+
+    // information reported on screen
+    std::string last_update_duration; // to report the time cost of updating
+    double Gamma = lattice.get_Gamma(),
+           delta = lattice.get_delta(),
+           magnetization = 0.;
+    int n_update = 0; // counter for number of updates performed;
+    int t = 0; // time-slice to be drawn on screen
+    int last_cluster_size = 0;
+    int n_flips_succeeded = 0; // #spins local-updating succeeded in flipping
+    bool save_mag = false; /* saving magnetization to a list to calculate
+                              magnetic susceptibility later */
+
+
+    // parameters window region
+    const int param_win_L = 0, param_win_T = 0, param_win_W = 80, 
+          param_win_H = 5;
+    WINDOW *param_win;
+
+
+
+
+    std::string data_file_path = "./data_file";
+
+    // if an older file already exists, move the old file
+    if (std::filesystem::exists(data_file_path)) {
+        const int max_it = 1000;
+        bool moved = false;
+        for (int it = 0; it < max_it; ++it) {
+            std::string moveto_file_path = data_file_path + "_old_" 
+                + std::to_string(it);
+            if (!std::filesystem::exists(moveto_file_path)) {
+                std::filesystem::rename(data_file_path, moveto_file_path);
+                moved = true;
+                break;
+            }
+        }
+        if (!moved) { 
+            std::cerr << "couldn't move existing file" << std::endl;
+            exit(1);
+        }
+    }
+
+    std::ofstream data_file(data_file_path);
+    if (!data_file) {
+        std::cerr << "cannot open file for writing\nexiting ..." << std::endl;
+        exit(1);
+    }
+
+
+
 
     // initialize and configure ncurses
     initscr();
@@ -46,27 +103,13 @@ int main()
     start_color();
     init_pair(1, COLOR_BLUE, COLOR_BLACK);
     init_pair(2, COLOR_BLUE, COLOR_WHITE);
-
-
-    double beta = 10., field = 1.;
-    double Gamma, delta, magnetization = 0.;
-    int n_update = 0; // counter for number of updates performed;
-    std::string last_update_duration;
-    int t = 0; // time-slice to be drawn on screen
-    hexagonal<nx, ny, nt> lattice(beta, field);
-    Gamma = lattice.get_Gamma(); delta = lattice.get_delta();
-
-
-    const int param_win_L = 0, param_win_T = 0, param_win_W = 80, 
-          param_win_H = 5;
-    WINDOW *param_win = newwin(param_win_H, param_win_W, param_win_L,
+    param_win = newwin(param_win_H, param_win_W, param_win_L,
             param_win_T);
     nodelay(param_win, TRUE); /* don't let wgetch stop the execution 
                                  waiting for a keystroke */
 
 
-    int last_cluster_size = 0;
-    int n_flips_succeeded = 0;
+
 
     auto draw_param_win = [&]() {
         wmove(param_win, 1, 1);
@@ -75,7 +118,11 @@ int main()
                 beta, field, nx, ny, nt, last_cluster_size, n_flips_succeeded,
                 Gamma, delta);
         wmove(param_win, 2, 1);
-        wprintw(param_win, "mag'n:%.4f", magnetization);
+        wprintw(param_win, "mag'n:%.4f ", magnetization);
+
+        if (save_mag) {
+            wprintw(param_win, "suce:%.4f ", lattice.mag_susc());
+        }
         wmove(param_win, 3, 1);
         wprintw(param_win, "update#:%d"
                 " LstClusSiz:%d LstUpdDur:%s", n_update,
@@ -83,6 +130,8 @@ int main()
         box(param_win, 0, 0);
         wrefresh(param_win);
     };
+
+
 
     auto draw_state = [&lattice, &t]() {
         for (int sublattice = 0; sublattice < 2; ++sublattice) {
@@ -102,34 +151,47 @@ int main()
     };
 
 
+
     int key;
     do {
         key = wgetch(param_win);
         usleep(1000);
 
+        /* keys:
+         * u/U: update the state
+         * t/T: go to previous/next time-slice
+         * h/H: decrease/increase the magnetic field by a factor of 1.1
+         * b/B: decrease/increase the inverse-temperature by a factor of 1.1
+         */
         switch (key) {
-            case 'u':
+            case 'u': // update
             case 'U':
                 push_timer();
+                for (int it = 0; it < 100; ++it) {
+                    // it seems that the cluster evolution isn't ergodic?
+                    // so, is this loop a valid solution for this?
+                    for (int j = 0; j < 10; j++) {
+                        n_flips_succeeded = lattice.local_update();
+                    }
 
-                // it seems that the cluster evolution isn't ergodic?
-                // so, is this loop a valid solution for this?
-                for (int i = 0; i < 1000; i++) {
-                    n_flips_succeeded = lattice.local_update();
+                    last_cluster_size = lattice.cluster_update();
+                    magnetization = lattice.magnetization();
+                    n_update++;
+                    data_file << n_update << ' ' << magnetization << std::endl;
                 }
-
-                last_cluster_size = lattice.cluster_update();
-                magnetization = lattice.magnetization();
-                n_update++;
                 last_update_duration = pop_timer();
+
+                if (save_mag) {
+                    lattice.save_mag();
+                }
                 break;
-            case 't':
+            case 't': 
                 t += nt - 1; t%=nt;
                 break;
-            case 'T':
+            case 'T': 
                 t++; t%=nt;
                 break;
-            case 'h':
+            case 'h': 
                 field /= 1.1;
                 lattice.set_params(beta, field);
                 Gamma = lattice.get_Gamma(); delta = lattice.get_delta();
@@ -149,10 +211,21 @@ int main()
                 lattice.set_params(beta, field);
                 Gamma = lattice.get_Gamma(); delta = lattice.get_delta();
                 break;
+            case 'm':
+            case 'M':
+                if (save_mag) {
+                    save_mag = false;
+                    lattice.clear_mag_history();
+                } else {
+                    save_mag = true;
+                }
+                break;
         }
         draw_param_win();
         draw_state();
     } while (key != 'q');
+
+
 
     // finalize TUI
     delwin(param_win);

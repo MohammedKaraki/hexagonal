@@ -24,6 +24,7 @@ private:
     static constexpr auto n_cell3 = nx * ny * nt; // #unit cells in 2+1D
     static constexpr auto n_cell2 = nx * ny;// #unit cells in a 2D time-slice
     static constexpr auto n_site3 = 2 * n_cell3;// we have 2 atoms / unit cell
+    static constexpr auto n_site2 = 2 * n_cell2;
     static constexpr auto n_nbrs = 5; /* we have 5 nearest neighbors, i.e.,
                                         3 (spatial) + 2 (temporal axis) */
 private:
@@ -31,6 +32,11 @@ private:
     std::array<std::array<int, n_nbrs>, n_site3> nbr_indices; /* we will 
                                     calculate the indices for the neighbors 
                                     of each site once and for all */
+
+    // a list of magnetization history for calculating mag_susc.
+    // Related functions: save_mag, clear_mag_history, mag_susc.
+    std::vector<double> mag_history;
+
 private:
     // return true with probability p
     bool prob_true(double p)
@@ -180,8 +186,12 @@ public:
 
         // last bond is antiferromagnetic exactly for even-x sites:
         nbr_spin = state[nbr_indices[rand_index][n_nbrs-1]];
+#ifdef FRUSTRATION_OFF
+        flip_cost += (+2.) * spin * nbr_spin;
+#else
         flip_cost += (rand_index % 2 == 0 ? (-1) : (+1)) *
             (+2.) * spin * nbr_spin;
+#endif
 
 
         static int flips_succeeded = 0;
@@ -225,8 +235,12 @@ public:
                 // exchange. Here we take care of the exchange with the last
                 // neighbor, which can be either, depending on x parity.
                 int n_ferro_bonds = n_nbrs;
+#ifdef FRUSTRATION_OFF
+                if (false) {
+#else
                 if (*old_it % 2 == 0) { /* for even x, the exchange is
                                            antiferromagnetic */
+#endif
                     n_ferro_bonds--;
                     int last_nbr_index = nbr_indices[*old_it][n_nbrs-1];
                     if (!on_cluster[last_nbr_index]) {
@@ -289,7 +303,7 @@ public:
                 }
             }
         }
-        return M / (nx * ny * 2);
+        return M / (n_site2);
     }
 
 
@@ -304,6 +318,43 @@ public:
 
     double get_Gamma() { return Gamma; }
     double get_delta() { return delta; }
+
+
+    void save_mag()
+    {
+        mag_history.push_back(magnetization());
+    }
+
+    void clear_mag_history()
+    {
+        mag_history.clear();
+    }
+
+
+    // return magnetic susceptibility per spin
+    // \Chi = \beta N (<m^2> - <m>^2).
+    // Note that we only need evaluate the average over a single time-slice
+    // since the operator m is diagonal.
+    double mag_susc()
+    {
+        if (mag_history.size() <= 0) {
+            return 0.;
+        }
+
+        double m_sum = 0., m2_sum = 0.;
+
+        for (auto it = mag_history.begin(); it != mag_history.end(); ++it) {
+            double m = *it;
+            m_sum += m;
+            m2_sum += m*m;
+        }
+
+        const int N = mag_history.size();
+        double m_avg = m_sum / N;
+        double m2_avg = m2_sum / N;
+        
+        return beta * n_site2 * (m2_avg - m_avg*m_avg);
+    }
 };
 
 #endif

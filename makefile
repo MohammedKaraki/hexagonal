@@ -2,14 +2,14 @@ EXECUTABLE = x
 SOURCES = main.cpp
 OBJECTS = $(patsubst %.cpp, %.o, $(SOURCES))
 
-CXX = g++
+CXX = g++-8
 CXX_GENERAL_FLAGS = -g -O2 -std=c++1z -Wall -Wpedantic -Wextra
-CXX_LIBRARY_FLAGS = -lncurses
+CXX_LIBRARY_FLAGS = -lncurses -lstdc++fs
 
 all: $(EXECUTABLE)
 
 $(EXECUTABLE): $(OBJECTS)
-	$(CXX) $(CXX_LIBRARY_FLAGS) -o $(EXECUTABLE) $(OBJECTS)
+	$(CXX) -o $(EXECUTABLE) $(OBJECTS) $(CXX_LIBRARY_FLAGS)
 
 $(OBJECTS): %.o: %.cpp
 	$(CXX) $(CXX_GENERAL_FLAGS)  -c $< -o $@
