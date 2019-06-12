@@ -7,8 +7,8 @@
 #include <cmath>
 #include <random>
 
-// coordinates of a site. sublattice={0, 1}
-struct coords { int x, y, t, sublattice; };
+// coordinates of a site. sub_lattice={0, 1}
+struct coords { int x, y, t, sub_lattice; };
 
 template<int nx, int ny, int nt, int rand_seed = 1999>
 class hexagonal // actually, honeycomb
@@ -18,7 +18,7 @@ private:
 
 private: 
     double beta, field;
-    double delta, Gamma;
+    double delta, eta, Gamma;
 
 private:
     static constexpr auto n_cell3 = nx * ny * nt; // #unit cells in 2+1D
@@ -46,9 +46,9 @@ private:
     }
 
 public:
-    int get_site_spin(int x, int y, int t, int sublattice) 
+    int get_site_spin(int x, int y, int t, int sub_lattice) 
     {
-        int index = coords_to_index(x, y, t, sublattice);
+        int index = coords_to_index(x, y, t, sub_lattice);
         return state[index];
     }
 
@@ -67,7 +67,7 @@ public:
 
         delta = beta / nt;
 
-        double eta = -.5 * std::log(std::tanh(delta * field));
+        eta = -.5 * std::log(std::tanh(delta * field));
         Gamma = eta / delta;
     }
 
@@ -77,48 +77,56 @@ public:
             for (int y = 0; y < ny; ++y) {
                 for (int t = 0; t < nt; ++t) {
                     int index;
-                    int sublattice;
+                    int sub_lattice;
 
 
-                    sublattice = 0;
-                    index = coords_to_index(x, y, t, sublattice);
-
-                    // temporal neighbors
-                    nbr_indices[index][0] = 
-                        coords_to_index(x, y, t+1, sublattice);
-                    nbr_indices[index][1] = 
-                        coords_to_index(x, y, t-1, sublattice);
-
-                    // spatial always-ferromagnetic exchange
-                    nbr_indices[index][2] = 
-                        coords_to_index(x, y-1, t, 1-sublattice);
-                    nbr_indices[index][3] = 
-                        coords_to_index(x+1, y-1, t, 1-sublattice);
-
-                    // spatial sometimes-ferromagnetic exchange
-                    nbr_indices[index][4] = 
-                        coords_to_index(x, y, t, 1-sublattice);
-
-
-
-                    sublattice = 1;
-                    index = coords_to_index(x, y, t, sublattice);
+                    /*      | /
+                            |/
+                            0
+                            |     */
+                    sub_lattice = 0;
+                    index = coords_to_index(x, y, t, sub_lattice);
 
                     // temporal neighbors
                     nbr_indices[index][0] = 
-                        coords_to_index(x, y, t+1, sublattice);
+                        coords_to_index(x, y, t+1, sub_lattice);
                     nbr_indices[index][1] = 
-                        coords_to_index(x, y, t-1, sublattice);
+                        coords_to_index(x, y, t-1, sub_lattice);
 
                     // spatial always-ferromagnetic exchange
                     nbr_indices[index][2] = 
-                        coords_to_index(x, y+1, t, 1-sublattice);
+                        coords_to_index(x, y-1, t, 1-sub_lattice);
                     nbr_indices[index][3] = 
-                        coords_to_index(x+1, y+1, t, 1-sublattice);
+                        coords_to_index(x+1, y-1, t, 1-sub_lattice);
 
                     // spatial sometimes-ferromagnetic exchange
                     nbr_indices[index][4] = 
-                        coords_to_index(x, y, t, 1-sublattice);
+                        coords_to_index(x, y, t, 1-sub_lattice);
+
+
+
+                    /*      |
+                     *      1
+                     *     /|
+                     *    / |     */
+                    sub_lattice = 1;
+                    index = coords_to_index(x, y, t, sub_lattice);
+
+                    // temporal neighbors
+                    nbr_indices[index][0] = 
+                        coords_to_index(x, y, t+1, sub_lattice);
+                    nbr_indices[index][1] = 
+                        coords_to_index(x, y, t-1, sub_lattice);
+
+                    // spatial always-ferromagnetic exchange
+                    nbr_indices[index][2] = 
+                        coords_to_index(x, y+1, t, 1-sub_lattice);
+                    nbr_indices[index][3] = 
+                        coords_to_index(x-1, y+1, t, 1-sub_lattice);
+
+                    // spatial sometimes-ferromagnetic exchange
+                    nbr_indices[index][4] = 
+                        coords_to_index(x, y, t, 1-sub_lattice);
 
                 }
             }
@@ -133,7 +141,7 @@ public:
     }
 
 
-    int coords_to_index(int x, int y, int t, int sublattice) 
+    int coords_to_index(int x, int y, int t, int sub_lattice) 
     {
 
         // take care of periodic boundary conditions without
@@ -141,14 +149,14 @@ public:
         x += nx; y += ny; t += nt;
         x %= nx; y %= ny; t %= nt;
 
-        return sublattice * n_cell3 + t * n_cell2 + y * nx + x;
+        return sub_lattice * n_cell3 + t * n_cell2 + y * nx + x;
     }
 
     coords index_to_coords(int index)
     {
        coords ret;
 
-       ret.sublattice = index / n_cell3;
+       ret.sub_lattice = index / n_cell3;
        index %= n_cell3;
 
        ret.t = index / n_cell2;
@@ -297,9 +305,9 @@ public:
         double M = 0;
         for (int x = 0; x < nx; ++x) {
             for (int y = 0; y < ny; ++y) {
-                for (int sublattice = 0; sublattice < 2; ++sublattice) {
+                for (int sub_lattice = 0; sub_lattice < 2; ++sub_lattice) {
                     const int t = 0;
-                    M += state[coords_to_index(x, y, t, sublattice)];
+                    M += state[coords_to_index(x, y, t, sub_lattice)];
                 }
             }
         }
@@ -311,7 +319,7 @@ public:
     {
         std::ostringstream ss;
         ss << "(" << c.x << ", " << c.y << ", " << c.t << ", " 
-            << c.sublattice << ")";
+            << c.sub_lattice << ")";
 
         return ss.str();
     }
@@ -355,6 +363,63 @@ public:
         
         return beta * n_site2 * (m2_avg - m_avg*m_avg);
     }
+
+    /* e = (U + V)/n_site2;
+     * E need to be evaluated using one slice only, be we'll average it over
+     * nt slices.
+     * For U, we'll loop over the sites on sub_lattice 0 only, each of which
+     * has 3 spatial exchanges. This exhausts all the spatial exchanges.
+     * For V, we need to consider the two sub_lattices to exhaust all the
+     * temporal links.
+     *
+       */
+    double energy()
+    {
+        // E = U + V
+        double U, V;
+
+        U = 0.;
+        V = 0.;
+        for (int t = 0; t < nt; ++t) { // average over nt slices
+
+            for (int x = 0; x < nx; ++x) {
+                for (int y = 0; y < ny; ++y) {
+
+                    int my_index;
+                    int my_spin;
+                    for (int sub_lattice = 1; sub_lattice >= 0; --sub_lattice) {
+
+                        my_index = 
+                            coords_to_index(x, y, t, sub_lattice);
+                        my_spin = state[my_index];
+
+                        V += std::exp(-2. * eta * my_spin * 
+                                state[nbr_indices[my_index][0]]);
+                    }
+
+                    // at this point, my_index and my_spin correspond
+                    // to sub_lattce = 0
+
+                    // the always-ferromagnetic exchange contributions
+                    U += (-1) * my_spin * (state[nbr_indices[my_index][2]]
+                            + state[nbr_indices[my_index][3]]);
+
+                    // the sometimes-ferromagnetic exchange contribution
+                    int last_exchange_sign = 1 - 2*(x%2); /*
+                          = +1 (anti-ferromagnetic) if x is even
+                          = -1 (ferromagnetic) if x is odd */
+                    U += last_exchange_sign * my_spin *
+                        state[nbr_indices[my_index][4]];
+                }
+            }
+
+        }
+        V = V * (-field) / nt;
+        U /= nt;
+
+        return (U + V) / n_site2;
+    }
+
 };
 
 #endif

@@ -48,7 +48,7 @@ int main()
     std::string last_update_duration; // to report the time cost of updating
     double Gamma = lattice.get_Gamma(),
            delta = lattice.get_delta(),
-           magnetization = 0.;
+           magnetization = 0., energy = 0.;
     int n_update = 0; // counter for number of updates performed;
     int t = 0; // time-slice to be drawn on screen
     int last_cluster_size = 0;
@@ -118,7 +118,7 @@ int main()
                 beta, field, nx, ny, nt, last_cluster_size, n_flips_succeeded,
                 Gamma, delta);
         wmove(param_win, 2, 1);
-        wprintw(param_win, "mag'n:%.4f ", magnetization);
+        wprintw(param_win, "mag'n:%.4f energy:%.4f ", magnetization, energy);
 
         if (save_mag) {
             wprintw(param_win, "suce:%.4f ", lattice.mag_susc());
@@ -167,17 +167,22 @@ int main()
             case 'u': // update
             case 'U':
                 push_timer();
-                for (int it = 0; it < 100; ++it) {
-                    // it seems that the cluster evolution isn't ergodic?
-                    // so, is this loop a valid solution for this?
-                    for (int j = 0; j < 10; j++) {
-                        n_flips_succeeded = lattice.local_update();
-                    }
+                {
+                    int total = 0;
+                    while (total < 20 * nx * ny * nt) {
+                        // it seems that the cluster evolution isn't ergodic?
+                        // so, is this loop a valid solution for this?
+                        for (int j = 0; j < 100; j++) {
+                            n_flips_succeeded = lattice.local_update();
+                        }
 
-                    last_cluster_size = lattice.cluster_update();
-                    magnetization = lattice.magnetization();
-                    n_update++;
-                    data_file << n_update << ' ' << magnetization << std::endl;
+                        last_cluster_size = lattice.cluster_update();
+                        total += last_cluster_size;
+                        magnetization = lattice.magnetization();
+                        energy = lattice.energy();
+                        n_update++;
+                        data_file << n_update << ' ' << magnetization << std::endl;
+                    }
                 }
                 last_update_duration = pop_timer();
 
@@ -220,6 +225,10 @@ int main()
                     save_mag = true;
                 }
                 break;
+            case 'r':
+            case 'R':
+                break;
+
         }
         draw_param_win();
         draw_state();
