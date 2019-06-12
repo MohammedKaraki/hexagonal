@@ -79,8 +79,10 @@ public:
                     int index;
                     int sub_lattice;
 
-
-                    /*      | /
+                    /* here is a diagram showing the links with nearest 
+                       neighbors of a site on the 0 sub_lattice. The short
+                       link means it's sometimes-ferromagnetic.
+                            | /
                             |/
                             0
                             |     */
@@ -105,10 +107,13 @@ public:
 
 
 
-                    /*      |
-                     *      1
-                     *     /|
-                     *    / |     */
+                    /* here is a diagram showing the links with nearest 
+                       neighbors of a site on the 1 sub_lattice. The short
+                       link means it's sometimes-ferromagnetic.
+                            |
+                            1
+                           /|
+                          / |     */
                     sub_lattice = 1;
                     index = coords_to_index(x, y, t, sub_lattice);
 
@@ -408,6 +413,9 @@ public:
                     int last_exchange_sign = 1 - 2*(x%2); /*
                           = +1 (anti-ferromagnetic) if x is even
                           = -1 (ferromagnetic) if x is odd */
+#ifdef FRUSTRATION_OFF
+                    last_exchange_sign = -1;
+#endif
                     U += last_exchange_sign * my_spin *
                         state[nbr_indices[my_index][4]];
                 }
