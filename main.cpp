@@ -39,7 +39,7 @@ std::string pop_timer() {
 
 int main()
 {
-    constexpr int nx = 20, ny = 20, nt = 10;
+    constexpr int nx = 20, ny = 20, nt = 50;
     double beta = 1., field = 1.;
     hexagonal<nx, ny, nt> lattice(beta, field);
 

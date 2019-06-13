@@ -1,6 +1,8 @@
-*
+/*
 !.gitignore
 !hexagonal.h
+!collect.cpp
 !main.cpp
 !makefile
+!/data/
 

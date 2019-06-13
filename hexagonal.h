@@ -8,7 +8,16 @@
 #include <random>
 
 // coordinates of a site. sub_lattice={0, 1}
-struct coords { int x, y, t, sub_lattice; };
+struct coords
+{ 
+    int x, y, t, sub_lattice; 
+};
+
+// feedback from the algorithm
+struct cluster_update_metadata
+{
+    int n_all_links, n_spatial_links, n_temporal_links;
+};
 
 template<int nx, int ny, int nt, int rand_seed = 1999>
 class hexagonal // actually, honeycomb
@@ -212,16 +221,23 @@ public:
         double flip_prob = std::exp(-delta * flip_cost);
         if (prob_true(flip_prob)) {
             state[rand_index] *= -1;
-                flips_succeeded++;
+            flips_succeeded++;
         }
 
         return flips_succeeded;
     }
 
-    int cluster_update()
+
+
+    int cluster_update(cluster_update_metadata *metadata)
     {
+        // feedback variables (metadata)
+        int n_temporal_links = 0, n_spatial_links = 0;
+
+
         std::vector<int> cluster, old_set, new_set;
-        int seed_index = rand_gen() % n_site3;//index of first site on cluster
+        int seed_index = rand_gen() % n_site3; /* index of first site on 
+                                                  cluster */
         cluster.push_back(seed_index);
         old_set.push_back(seed_index);
 
@@ -263,6 +279,8 @@ public:
                                 new_set.push_back(last_nbr_index);
                                 cluster.push_back(last_nbr_index);
                                 on_cluster[last_nbr_index] = true;
+
+                                n_spatial_links++;
                             }
                         }
                     }
@@ -279,6 +297,12 @@ public:
                                 new_set.push_back(nbr_index);
                                 cluster.push_back(nbr_index);
                                 on_cluster[nbr_index] = true;
+
+                                if (nbr_it < 2) {
+                                    n_temporal_links++;
+                                } else {
+                                    n_spatial_links++;
+                                }
                             }
                         }
                     }
@@ -298,6 +322,12 @@ public:
 
         for (auto it = cluster.begin(); it != cluster.end(); ++it) {
             state[*it] *= -1;
+        }
+
+        if (metadata != nullptr) {
+            metadata->n_spatial_links = n_spatial_links;
+            metadata->n_temporal_links = n_temporal_links;
+            metadata->n_all_links = n_spatial_links + n_temporal_links;
         }
 
         return cluster.size();
@@ -365,7 +395,7 @@ public:
         const int N = mag_history.size();
         double m_avg = m_sum / N;
         double m2_avg = m2_sum / N;
-        
+
         return beta * n_site2 * (m2_avg - m_avg*m_avg);
     }
 
@@ -392,7 +422,8 @@ public:
 
                     int my_index;
                     int my_spin;
-                    for (int sub_lattice = 1; sub_lattice >= 0; --sub_lattice) {
+                    for (int sub_lattice = 1; sub_lattice >= 0; --sub_lattice)
+                    {
 
                         my_index = 
                             coords_to_index(x, y, t, sub_lattice);
@@ -431,3 +462,4 @@ public:
 };
 
 #endif
+
